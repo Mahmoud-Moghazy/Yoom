@@ -1,48 +1,71 @@
 'use client';
 
 import { useGetCalls } from '@/hooks/useGetCalls';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 const UpcomingCalls = () => {
-  const [upcomingMeeting, setUpcomingMeeting] = useState<string | null>(null); 
+  const [upcomingMeetings, setUpcomingMeetings] = useState<Set<string>>(new Set());
   const { upcomingCalls } = useGetCalls();
 
-  useEffect(() => {
-    if (Array.isArray(upcomingCalls) && upcomingCalls.length > 0) {
-      const firstCall = upcomingCalls[0];
-      const state = firstCall?.state;
+  // Helper function to format date
+  const formatDateTime = (date: Date): string => {
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
 
-      // Subscribe to startsAt$ if it's defined
-      const subscription = state?.startsAt$?.subscribe(value => {
-        // Ensure value is a valid Date object
-        if (value instanceof Date) {
-          const time = value.toLocaleString(undefined, {
-            weekday: 'short',  
-            year: 'numeric',   
-            month: 'short',    
-            day: '2-digit',    
-            hour: '2-digit',   
-            minute: '2-digit', 
-            hour12: true       
-          });
-          setUpcomingMeeting(time); // Set formatted string
-        } else {
-          setUpcomingMeeting(null);
-        }
+  // Function to handle subscription
+  const handleSubscription = useCallback(() => {
+    if (Array.isArray(upcomingCalls) && upcomingCalls.length > 0) {
+      const subscriptions = upcomingCalls.map((call) => {
+        const state = call?.state;
+
+        return state?.startsAt$?.subscribe((value) => {
+          if (value instanceof Date) {
+            const formattedDate = formatDateTime(value);
+            
+            // Add to Set to avoid duplicates
+            setUpcomingMeetings((prevMeetings) => {
+              if (!prevMeetings.has(formattedDate)) {
+                return new Set([...prevMeetings, formattedDate]);
+              }
+              return prevMeetings;
+            });
+          }
+        });
       });
 
       return () => {
-        // Cleanup: unsubscribe if subscription exists
-        subscription?.unsubscribe();
+        subscriptions.forEach(subscription => subscription?.unsubscribe());
       };
     }
-  }, [upcomingCalls]); 
+  }, [upcomingCalls]);
+
+  useEffect(() => {
+    const unsubscribe = handleSubscription();
+    return () => unsubscribe && unsubscribe();
+  }, [handleSubscription]);
 
   return (
     <div>
-      {upcomingMeeting || "No upcoming meeting"}
+      {upcomingMeetings.size > 0 ? (
+        <ul>
+          {[...upcomingMeetings].map((meeting, index) => (
+            <li key={index}>{meeting}</li>
+          ))}
+        </ul>
+      ) : (
+        'No upcoming meetings'
+      )}
     </div>
   );
+  
 };
 
 export default UpcomingCalls;
