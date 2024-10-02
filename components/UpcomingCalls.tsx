@@ -1,10 +1,9 @@
 'use client';
 
 import { useGetCalls } from '@/hooks/useGetCalls';
-import { useEffect, useState, useCallback } from 'react';
+import { Call, CallRecording } from '@stream-io/video-react-sdk';
 
 const UpcomingCalls = () => {
-  const [upcomingMeetings, setUpcomingMeetings] = useState<Set<string>>(new Set());
   const { upcomingCalls } = useGetCalls();
 
   // Helper function to format date
@@ -20,52 +19,29 @@ const UpcomingCalls = () => {
     });
   };
 
-  // Function to handle subscription
-  const handleSubscription = useCallback(() => {
-    if (Array.isArray(upcomingCalls) && upcomingCalls.length > 0) {
-      const subscriptions = upcomingCalls.map((call) => {
-        const state = call?.state;
-
-        return state?.startsAt$?.subscribe((value) => {
-          if (value instanceof Date) {
-            const formattedDate = formatDateTime(value);
-            
-            // Add to Set to avoid duplicates
-            setUpcomingMeetings((prevMeetings) => {
-              if (!prevMeetings.has(formattedDate)) {
-                return new Set([...prevMeetings, formattedDate]);
-              }
-              return prevMeetings;
-            });
-          }
-        });
-      });
-
-      return () => {
-        subscriptions.forEach(subscription => subscription?.unsubscribe());
-      };
-    }
-  }, [upcomingCalls]);
-
-  useEffect(() => {
-    const unsubscribe = handleSubscription();
-    return () => unsubscribe && unsubscribe();
-  }, [handleSubscription]);
+  // Function to render meeting items
+  const renderMeetingItems = () => {
+    return upcomingCalls?.map((meeting: Call | CallRecording, index) => {
+      const startsAt = (meeting as Call).state?.startsAt;
+      const formattedDate = startsAt ? formatDateTime(new Date(startsAt)) : 'No start time available';
+      
+      return (
+        <li key={index}>
+          {formattedDate}
+        </li>
+      );
+    });
+  };
 
   return (
-    <div>
-      {upcomingMeetings.size > 0 ? (
-        <ul>
-          {[...upcomingMeetings].map((meeting, index) => (
-            <li key={index}>{meeting}</li>
-          ))}
-        </ul>
+    <>
+      {upcomingCalls && upcomingCalls?.length > 0 ? (
+        <ul>{renderMeetingItems()}</ul>
       ) : (
-        'No upcoming meetings'
+        <p>No upcoming meetings</p>
       )}
-    </div>
+    </>
   );
-  
 };
 
 export default UpcomingCalls;
